@@ -1,4 +1,3 @@
-;; fucheck-init
 (defun fucheck-init ()
   (defvar fucheck-collapse-on-file-open t)
   (add-to-invisibility-spec '(fucheck . t))
@@ -7,7 +6,6 @@
   (when fucheck-collapse-on-file-open
     (fucheck-collapse-all-tests)))
 
-;; fucheck-next-test
 (defun fucheck-next-test (&optional count print-message)
   (interactive (list current-prefix-arg "Could not find Fucheck test"))
   (let ((pos (re-search-forward
@@ -19,18 +17,15 @@
 
 
 
-;; appropriate-action
 (defun fucheck-appropriate-action (&optional action pos)
   (cond ((or (equal action (quote collapse)) (equal action (quote expand))) action)
         ((get-text-property (if pos pos (point)) (quote invisible)) (quote expand))
         (t (quote collapse))))
 
-;; delete-overlay
 (defun fucheck-delete-overlay (overlay)
   (delete-overlay overlay)
   (setq-local fucheck-overlay-alist (assq-delete-all test fucheck-overlay-alist)))
 
-;; make-overlay
 (defun fucheck-make-overlay (start end test)
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'invisible 'fucheck)
@@ -39,7 +34,6 @@
          (cons (cons test overlay) fucheck-overlay-alist))
     overlay))
 
-;; overlay-at
 (defun fucheck-overlay-at (&optional pos name)
   (unless pos (setq pos (point)))
   (reduce (lambda (x y) (or x y)) ; Should exit on first non-nil
@@ -59,7 +53,6 @@
     (substring msg 0 (1+ end))))
 
 
-;; fucheck-collapse-test
 (defun fucheck-collapse-test (&optional action)
   (interactive)
   (save-excursion
@@ -108,7 +101,9 @@
 (defun fucheck-tests-in-region (start end)
   (save-excursion
     (if (not (use-region-p))
-        (list (fucheck-next-test -1))
+        (progn
+          (end-of-line)
+          (list (fucheck-next-test -1)))
       (let ((real-end (progn (goto-char end)
                              (end-of-line)
                              (point)))
@@ -149,3 +144,5 @@
                  (let ((sel-win (selected-window)))
                    (pop-to-buffer (process-buffer proc))
                    (select-window sel-win))))))
+
+
