@@ -2,6 +2,7 @@
 (defun fucheck-init ()
   (defvar fucheck-collapse-on-file-open t)
   (add-to-invisibility-spec '(fucheck . t))
+  (setq-local fucheck-process-string nil)
   (setq-local fucheck-overlay-alist nil)
   (when fucheck-collapse-on-file-open
     (fucheck-collapse-all-tests)))
@@ -9,12 +10,53 @@
 ;; fucheck-next-test
 (defun fucheck-next-test (&optional count print-message)
   (interactive (list current-prefix-arg "Could not find Fucheck test"))
-  (let ((res (re-search-forward
+  (let ((pos (re-search-forward
               "^[ 	]*--[ 	]*fucheck[ 	]*\\_<\\([A-Za-z][A-Za-z0-9_']*\\)"
               nil t (cond ((listp count) (car count))
                           ((equal '- count) -1)
                           (t count)))))
-    (if res res (when print-message (message print-message)) nil)))
+    (if pos (match-string 1) (when print-message (message print-message)) nil)))
+
+
+
+;; appropriate-action
+(defun fucheck-appropriate-action (&optional action pos)
+  (cond ((or (equal action (quote collapse)) (equal action (quote expand))) action)
+        ((get-text-property (if pos pos (point)) (quote invisible)) (quote expand))
+        (t (quote collapse))))
+
+;; delete-overlay
+(defun fucheck-delete-overlay (overlay)
+  (delete-overlay overlay)
+  (setq-local fucheck-overlay-alist (assq-delete-all test fucheck-overlay-alist)))
+
+;; make-overlay
+(defun fucheck-make-overlay (start end test)
+  (let ((overlay (make-overlay start end)))
+    (overlay-put overlay 'invisible 'fucheck)
+    (overlay-put overlay 'fucheck test)
+    (set 'fucheck-overlay-alist
+         (cons (cons test overlay) fucheck-overlay-alist))
+    overlay))
+
+;; overlay-at
+(defun fucheck-overlay-at (&optional pos name)
+  (unless pos (setq pos (point)))
+  (reduce (lambda (x y) (or x y)) ; Should exit on first non-nil
+          (mapcar (lambda (o)
+                    (and (if name
+                             (equal name (overlay-get o 'fucheck))
+                           (overlay-get o 'fucheck))
+                         (equal 'fucheck (overlay-get o 'invisible)) o))
+                  (overlays-at pos))
+          :initial-value nil))
+
+(defun fucheck-fix-message (msg-list)
+  (let* ((msg (apply 'concatenate 'string (reverse msg-list)))
+         (end (- (length msg) 1)))
+    (while (char-equal ?\n (aref msg end))
+      (setq end (- end 1)))
+    (substring msg 0 (1+ end))))
 
 
 ;; fucheck-collapse-test
@@ -41,9 +83,11 @@
                         (next-test (when (fucheck-next-test) (beginning-of-line) (point)))
                         (end (- (cond ((and empty-line next-test) (min empty-line next-test))
                                       (empty-line empty-line)
-                                      (next-test next-test) (t (+ 1 (point-max))))
+                                      (next-test next-test)
+                                      (t (+ 1 (point-max))))
                                 1)))
-                   (fucheck-make-overlay start end test))))))))
+                   ; (break-point)
+                   (fucheck-make-overlay start end test-name))))))))
 
 
 
@@ -61,34 +105,47 @@
       (while (progn (fucheck-collapse-test action)
                     (fucheck-next-test))))))
 
-;; appropriate-action
-(defun fucheck-appropriate-action (&optional action pos)
-  (cond ((or (equal action (quote collapse)) (equal action (quote expand))) action)
-        ((get-text-property (if pos pos (point)) (quote invisible)) (quote expand))
-        (t (quote collapse))))
+(defun fucheck-tests-in-region (start end)
+  (save-excursion
+    (if (not (use-region-p))
+        (list (fucheck-next-test -1))
+      (let ((real-end (progn (goto-char end)
+                             (end-of-line)
+                             (point)))
+            (tests nil)
+            (current-test (progn
+                            (goto-char start)
+                            (beginning-of-line)
+                            (fucheck-next-test))))
+        (while (and current-test (<= (point) real-end))
+          (setq tests (cons current-test tests))
+          (setq current-test (fucheck-next-test)))
+        tests))))
 
-;; delete-overlay
-(defun fucheck-delete-overlay (overlay)
-  (delete-overlay overlay)
-  (setq-local fucheck-overlay-alist (assq-delete-all test fucheck-overlay-alist)))
 
-;; make-overlay
-(defun fucheck-make-overlay (start end test)
-  (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'invisible 'fucheck)
-    (overlay-put overlay 'fucheck 'test)
-    (set (make-local-variable 'fucheck-overlay-alist)
-         (cons (cons test overlay) fucheck-overlay-alist))
-    overlay))
 
-;; overlay-at
-(defun fucheck-overlay-at (&optional pos name)
-  (if pos nil (setq pos (point)))
-  (reduce (lambda (x y) (or x y))
-          (mapcar (lambda (o)
-                    (and (if name
-                             (equal name (overlay-get o (quote fucheck)))
-                           (overlay-get o (quote fucheck)))
-                         (equal (quote fucheck) (overlay-get o (quote invisible))) o))
-                  (overlays-at pos))
-          :initial-value nil))
+(defun fucheck-test-region (start end)
+  (interactive "r")
+  (save-excursion
+    (let ((tests (fucheck-tests-in-region start end)))
+      (make-process
+       :name (apply 'concat "fucheck" (mapcar (lambda (x) (concat "-" x)) tests))
+       :command (concatenate 'list '("fucheck" "--only") tests (list buffer-file-name))
+       :filter (lambda (proc string)
+                 (process-put proc 'fucheck-string
+                              (cons string (process-get proc 'fucheck-string))))
+       :sentinel (lambda (proc event)
+                   (message "%s"
+                            (fucheck-fix-message (process-get proc 'fucheck-string))))))))
+
+(defun fucheck-test-all ()
+  (interactive)
+  (let ((name (concat "fucheck-" (file-name-nondirectory (buffer-file-name)))))
+    (make-process
+     :name name
+     :buffer name
+     :command (list "fucheck" (buffer-file-name))
+     :sentinel (lambda (proc event)
+                 (let ((sel-win (selected-window)))
+                   (pop-to-buffer (process-buffer proc))
+                   (select-window sel-win))))))
