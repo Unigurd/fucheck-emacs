@@ -1,5 +1,7 @@
 (defun fucheck-init ()
-  (defvar fucheck-collapse-on-file-open t)
+  "Initialises buffer for use with Fucheck. Ought to be a minor mode."
+  (defvar fucheck-collapse-on-file-open t
+    "Collapses Fucheck tests when a file is opened where fucheck is initialized. Global option.")
   (add-to-invisibility-spec '(fucheck . t))
   (setq-local fucheck-process-string nil)
   (setq-local fucheck-overlay-alist nil)
@@ -7,6 +9,7 @@
     (fucheck-collapse-all-tests)))
 
 (defun fucheck-next-test (&optional count print-message)
+  "Moves to the next Fucheck test. The numeric prefix argument COUNT is how many tests to move, and PRINT-MESSAGE is the message displayed when no tests are found when called interactively. Returns the name of the next test."
   (interactive (list current-prefix-arg "Could not find Fucheck test"))
   (let ((pos (re-search-forward
               "^[ 	]*--[ 	]*fucheck[ 	]*\\_<\\([A-Za-z][A-Za-z0-9_']*\\)"
@@ -15,18 +18,19 @@
                           (t count)))))
     (if pos (match-string 1) (when print-message (message print-message)) nil)))
 
-
-
 (defun fucheck-appropriate-action (&optional action pos)
+  "Figures out whether to collapse or expand tests. If action is either of the valid actions, the symbols 'collapse' or 'expand', return that, otherwise see if the text is hidden at position POS, which defaults to point."
   (cond ((or (equal action (quote collapse)) (equal action (quote expand))) action)
         ((get-text-property (if pos pos (point)) (quote invisible)) (quote expand))
         (t (quote collapse))))
 
 (defun fucheck-delete-overlay (overlay)
+  "Delete overlay used by Fucheck."
   (delete-overlay overlay)
   (setq-local fucheck-overlay-alist (assq-delete-all test fucheck-overlay-alist)))
 
 (defun fucheck-make-overlay (start end test)
+  "Make overlay used by Fucheck."
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'invisible 'fucheck)
     (overlay-put overlay 'fucheck test)
@@ -35,6 +39,7 @@
     overlay))
 
 (defun fucheck-overlay-at (&optional pos name)
+  "Check whether an overlay used by Fucheck is at position POS by the name NAME."
   (unless pos (setq pos (point)))
   (reduce (lambda (x y) (or x y)) ; Should exit on first non-nil
           (mapcar (lambda (o)
@@ -46,6 +51,7 @@
           :initial-value nil))
 
 (defun fucheck-fix-message (msg-list)
+  "Fix up the list of strings printed to STDOUT by the Fucheck application. Used as a sentinel for Fucheck processes."
   (let* ((msg (apply 'concatenate 'string (reverse msg-list)))
          (end (- (length msg) 1)))
     (if (= 0 (length msg))
@@ -55,6 +61,7 @@
       (substring msg 0 (1+ end)))))
 
 (defun fucheck-collapse-test (&optional action)
+  "Collapse/expand the test at or above point. Toggles if ACTION is NIL, expands if it is the symbol 'expand' and collapses if it is the symbol 'collapse'."
   (interactive)
   (save-excursion
     (end-of-line)
@@ -82,7 +89,9 @@
                                 1)))
                    (fucheck-make-overlay start end test-name))))))))
 
+
 (defun fucheck-collapse-all-tests (&optional action)
+  "Collapses/expands all tests in the file. Toggles if ACTION is NIL, expands if it is the symbol 'expand' and collapses if it is the symbol 'collapse'."
   (interactive)
   (save-excursion
     (unless action (setq action 'collapse))
@@ -96,6 +105,7 @@
                     (fucheck-next-test))))))
 
 (defun fucheck-tests-in-region (start end)
+  "Returns a list of the tests in the region if region is active, otherwise the nearest test above point."
   (save-excursion
     (if (not (use-region-p))
         (progn
@@ -115,6 +125,7 @@
         tests))))
 
 (defun fucheck-test-region (start end &optional prefix)
+  "Tests all tests in the region. If region is not active, test the test at or above point. Writes the result to the echo area."
   (interactive "r\nP")
   (save-excursion
     (let ((backend (if prefix "opencl" "c"))
@@ -130,6 +141,7 @@
                             (fucheck-fix-message (process-get proc 'fucheck-string))))))))
 
 (defun fucheck-test-all (&optional prefix)
+  "Tests all tests in the file. Writes the result to a buffer."
   (interactive "P")
   (let ((backend (if prefix "opencl" "c"))
         (name (generate-new-buffer-name
@@ -145,6 +157,7 @@
 
 
 (defun fucheck-preprocess ()
+  "Writes the preprocessed code that Fucheck used to a buffer for inspection. Enables futhark-mode, but disables eldoc-mode as that requires the buffer to be associated with a file."
   (interactive)
   (let ((name (generate-new-buffer-name
                (concat "fucheck-" (file-name-nondirectory (buffer-file-name)) "-preprocess"))))
