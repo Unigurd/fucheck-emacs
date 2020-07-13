@@ -144,3 +144,15 @@
                    (select-window sel-win))))))
 
 
+(defun fucheck-preprocess ()
+  (interactive)
+  (let ((name (generate-new-buffer-name
+               (concat "fucheck-" (file-name-nondirectory (buffer-file-name)) "-preprocess"))))
+    (make-process
+     :name name
+     :buffer name
+     :command (list "fucheck" "-o" (buffer-file-name))
+     :sentinel (lambda (proc event)
+                 (pop-to-buffer (process-buffer proc))
+                 (futhark-mode)
+                 (eldoc-mode -1)))))
