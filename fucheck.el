@@ -54,7 +54,6 @@
         (setq end (- end 1)))
       (substring msg 0 (1+ end)))))
 
-
 (defun fucheck-collapse-test (&optional action)
   (interactive)
   (save-excursion
@@ -81,7 +80,6 @@
                                       (next-test next-test)
                                       (t (+ 1 (point-max))))
                                 1)))
-                   ; (break-point)
                    (fucheck-make-overlay start end test-name))))))))
 
 (defun fucheck-collapse-all-tests (&optional action)
@@ -134,7 +132,8 @@
 (defun fucheck-test-all (&optional prefix)
   (interactive "P")
   (let ((backend (if prefix "opencl" "c"))
-        (name (concat "fucheck-" (file-name-nondirectory (buffer-file-name)))))
+        (name (generate-new-buffer-name
+               (concat "fucheck-" (file-name-nondirectory (buffer-file-name))))))
     (make-process
      :name name
      :buffer name
