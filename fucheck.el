@@ -48,9 +48,11 @@
 (defun fucheck-fix-message (msg-list)
   (let* ((msg (apply 'concatenate 'string (reverse msg-list)))
          (end (- (length msg) 1)))
-    (while (char-equal ?\n (aref msg end))
-      (setq end (- end 1)))
-    (substring msg 0 (1+ end))))
+    (if (= 0 (length msg))
+        "Fucheck exited without message"
+      (while (char-equal ?\n (aref msg end))
+        (setq end (- end 1)))
+      (substring msg 0 (1+ end)))))
 
 
 (defun fucheck-collapse-test (&optional action)
@@ -82,9 +84,6 @@
                    ; (break-point)
                    (fucheck-make-overlay start end test-name))))))))
 
-
-
-;; fucheck-collapse-all-tests
 (defun fucheck-collapse-all-tests (&optional action)
   (interactive)
   (save-excursion
@@ -116,8 +115,6 @@
           (setq tests (cons current-test tests))
           (setq current-test (fucheck-next-test)))
         tests))))
-
-
 
 (defun fucheck-test-region (start end &optional prefix)
   (interactive "r\nP")
