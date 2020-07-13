@@ -57,7 +57,7 @@
   (interactive)
   (save-excursion
     (end-of-line)
-    (when (fucheck-next-test -1)
+    (when (fucheck-next-test -1) ; Get test name from here
       (end-of-line)
 
       (let* ((fut-fun-regex
@@ -119,13 +119,14 @@
 
 
 
-(defun fucheck-test-region (start end)
-  (interactive "r")
+(defun fucheck-test-region (start end &optional prefix)
+  (interactive "r\nP")
   (save-excursion
-    (let ((tests (fucheck-tests-in-region start end)))
+    (let ((backend (if prefix "opencl" "c"))
+          (tests (fucheck-tests-in-region start end)))
       (make-process
        :name (apply 'concat "fucheck" (mapcar (lambda (x) (concat "-" x)) tests))
-       :command (concatenate 'list '("fucheck" "--only") tests (list buffer-file-name))
+       :command (concatenate 'list (list "fucheck" backend "--only") tests (list buffer-file-name))
        :filter (lambda (proc string)
                  (process-put proc 'fucheck-string
                               (cons string (process-get proc 'fucheck-string))))
@@ -133,13 +134,14 @@
                    (message "%s"
                             (fucheck-fix-message (process-get proc 'fucheck-string))))))))
 
-(defun fucheck-test-all ()
-  (interactive)
-  (let ((name (concat "fucheck-" (file-name-nondirectory (buffer-file-name)))))
+(defun fucheck-test-all (&optional prefix)
+  (interactive "P")
+  (let ((backend (if prefix "opencl" "c"))
+        (name (concat "fucheck-" (file-name-nondirectory (buffer-file-name)))))
     (make-process
      :name name
      :buffer name
-     :command (list "fucheck" (buffer-file-name))
+     :command (list "fucheck" backend (buffer-file-name))
      :sentinel (lambda (proc event)
                  (let ((sel-win (selected-window)))
                    (pop-to-buffer (process-buffer proc))
